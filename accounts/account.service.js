@@ -327,10 +327,6 @@ async function revokeToken({ token, ipAddress }) {
 
 async function register(params, ipAddress, origin) {
     // validate
-    // const anat = await db.Account.findOne({ email: 'anatelli10@gmail.com' });
-    // if (anat) await _delete(anat);
-    // const natdev = await db.Account.findOne({ email: 'natellidev@gmail.com' });
-    // if (natdev) await _delete(natdev);
     const existing = await db.Account.findOne({ email: params.email });
     if (existing) await _delete(existing._id);
     // if (await db.Account.findOne({ email: params.email }))
