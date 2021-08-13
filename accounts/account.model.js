@@ -16,7 +16,7 @@ const schema = new Schema({
             messageId: { type: String, required: false },
             messageDate: { type: Number, required: false },
             sender: { type: String, required: true },
-            senderUrl: { type: String, required: true },
+            senderUrl: { type: String, required: false },
             created: { type: Number, default: Date.now },
             updated: Number
         }

@@ -124,7 +124,7 @@ function addPackageSchema(req, res, next) {
         courierCode: Joi.string().required(),
         trackingNumber: Joi.string().required(),
         sender: Joi.string().required(),
-        senderUrl: Joi.string().domain().required()
+        senderUrl: Joi.string().domain().empty('')
     });
     validateRequest(req, next, schema);
 }
