@@ -1,12 +1,11 @@
 ﻿const express = require('express');
-const jsonwebtoken = require('jsonwebtoken');
 const router = express.Router();
 const Joi = require('joi');
 const validateRequest = require('_middleware/validate-request');
 const authorize = require('_middleware/authorize');
 const Role = require('_helpers/role');
 const accountService = require('./account.service');
-const { getToken, getAuthURL } = require('_helpers/googleAuth');
+const { getAuthURL } = require('_helpers/googleAuth');
 
 router.post('/refresh-token', refreshToken);
 router.post('/revoke-token', authorize(), revokeTokenSchema, revokeToken);
@@ -19,51 +18,38 @@ router.post(
 );
 
 router.get('/auth/start', authStart);
-router.get('/auth/callback', authCallback, registerSchema, register);
+router.get('/auth/callback', authCallback);
 router.get('/packages', authorize(), getPackages);
 router.get('/restore-packages', authorize(), restorePackages);
 router.get('/reset-packages', authorize(), resetPackages);
-router.get('/:id', authorize(), getById);
 
 module.exports = router;
 
-async function authStart(req, res) {
+function authStart(req, res) {
     return res.redirect(getAuthURL(req.query.email));
 }
 
 async function authCallback(req, res, next) {
-    if (!req.query || !req.query.code) return authStart(req, res);
+    // Clicked back or cancel in UI
+    if (!req.query) return authStart(req, res);
 
-    const code = req.query.code;
     const emailAddress = JSON.parse(
         decodeURIComponent(req.query.state)
     ).emailAddress;
 
-    const { access_token, refresh_token, id_token, expiry_date } = (
-        await getToken(code)
-    ).tokens;
-
-    const { email, given_name, family_name } = jsonwebtoken.decode(id_token);
-
-    if (email !== emailAddress) {
-        return res.status(400)
-            .send(`Error: Authenticated with the wrong account.
-      Authenticated with "${email}" instead of "${
-            emailAddress ?? 'unknown'
-        }".`);
-    }
-
-    req.body = {
-        ...req.body,
-        email,
-        firstName: given_name,
-        lastName: family_name,
-        googleAccessToken: access_token,
-        googleRefreshToken: refresh_token,
-        googleTokenExpiry: expiry_date
-    };
-
-    next();
+    accountService
+        .authCallback(req.query.code, emailAddress, req.ip, req.get('origin'))
+        .then(response =>
+            res.send(
+                `<script>
+                window.parent.opener.postMessage(
+                    { loginResponse: ${JSON.stringify(response)} }, 
+                    'https://mail.google.com'
+                );
+            </script>`
+            )
+        )
+        .catch(next);
 }
 
 function refreshToken(req, res, next) {
@@ -97,46 +83,6 @@ function revokeToken(req, res, next) {
     accountService
         .revokeToken({ token, ipAddress })
         .then(() => res.json({ message: 'Token revoked' }))
-        .catch(next);
-}
-
-function registerSchema(req, res, next) {
-    const schema = Joi.object({
-        email: Joi.string().email().required(),
-        firstName: Joi.string().required(),
-        lastName: Joi.string().required(),
-        googleAccessToken: Joi.string().required(),
-        googleRefreshToken: Joi.string().required(),
-        googleTokenExpiry: Joi.number().required()
-    });
-    validateRequest(req, next, schema);
-}
-
-function register(req, res, next) {
-    accountService
-        .register(req.body, req.ip, req.get('origin'))
-        .then(response =>
-            res.send(
-                `<script>
-                    window.parent.opener.postMessage(
-                        { loginResponse: ${JSON.stringify(response)} }, 
-                        'https://mail.google.com'
-                    );
-                </script>`
-            )
-        )
-        .catch(next);
-}
-
-function getById(req, res, next) {
-    // users can get their own account and admins can get any account
-    if (req.params.id !== req.user.id && req.user.role !== Role.Admin) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    accountService
-        .getById(req.params.id)
-        .then(account => (account ? res.json(account) : res.sendStatus(404)))
         .catch(next);
 }
 
@@ -178,7 +124,7 @@ function addPackageSchema(req, res, next) {
         courierCode: Joi.string().required(),
         trackingNumber: Joi.string().required(),
         sender: Joi.string().required(),
-        senderUrl: Joi.string().required()
+        senderUrl: Joi.string().domain().required()
     });
     validateRequest(req, next, schema);
 }

@@ -9,13 +9,13 @@ const base64url = require('base64url');
 const textVersion = require('textversionjs');
 const { getAccessToken } = require('_helpers/googleAuth');
 const { track } = require('_helpers/tracking');
-
-const gmail = google.gmail('v1');
+const { getToken } = require('_helpers/googleAuth');
 
 module.exports = {
     refreshToken,
     revokeToken,
-    register,
+    authCallback,
+    signIn,
     delete: _delete,
     getPackages,
     restorePackages,
@@ -27,10 +27,49 @@ module.exports = {
 // Find tracking numbers from messages this many days old or newer
 const AMOUNT_OF_DAYS = 90;
 
-async function getPackages(email) {
-    const account = await db.Account.findOne({ email });
+const gmail = google.gmail('v1');
 
-    if (!account) throw 'Account does not exist';
+// Matches any links not from a courier website (i.e. skips https://usps.com/foobar but matches https://google.com/foobar )
+const nonCourierLinkPattern = new RegExp(
+    `https?:\\/\\/(?:www\\.)?((?!.*${[fedex, ups, usps]
+        .map(courier => courier.courier_code)
+        .join(
+            '|.*'
+        )}).*)\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&//=]*)`,
+    'gi'
+);
+
+async function authCallback(code, emailAddress, ipAddress, origin) {
+    const { access_token, refresh_token, id_token, expiry_date } = (
+        await getToken(code)
+    ).tokens;
+
+    const { email, given_name, family_name } = jwt.decode(id_token);
+
+    if (email !== emailAddress) {
+        return res.status(400)
+            .send(`Error: Authenticated with the wrong account.
+      Authenticated with "${email}" instead of "${
+            emailAddress ?? 'unknown'
+        }".`);
+    }
+
+    return signIn(
+        {
+            email,
+            firstName: given_name,
+            lastName: family_name,
+            googleAccessToken: access_token,
+            googleRefreshToken: refresh_token,
+            googleTokenExpiry: expiry_date
+        },
+        ipAddress,
+        origin
+    );
+}
+
+async function getPackages(email) {
+    const account = await getAccountByEmail(email);
 
     // Only update up to once per hour
     if (Date.now() - account.updated < 60 * 60 * 1000) return account.packages;
@@ -46,9 +85,7 @@ async function getPackages(email) {
 
 async function updateExistingPackages(packages) {
     const now = Date.now();
-    for (const i in packages) {
-        const package = packages[i];
-
+    for (const package of packages) {
         // Skip packages who are 90 days or older
         if (
             (Date.now() - package.messageDate) / (24 * 60 * 60) >=
@@ -59,15 +96,12 @@ async function updateExistingPackages(packages) {
         const info = await track(package.courierCode, package.trackingNumber);
         package.updated = now;
 
-        if (
-            package.status !== info.status ||
-            package.label !== info.label ||
-            package.deliveryTime !== info.deliveryTime
-        ) {
-            package.status = info.status;
-            package.label = info.label;
+        if (package.status != info.status) package.status = info.status;
+
+        if (package.label != info.label) package.label = info.label;
+
+        if (package.deliveryTime != info.deliveryTime)
             package.deliveryTime = info.deliveryTime;
-        }
     }
 }
 
@@ -179,15 +213,6 @@ async function findNewPackages(account) {
     }
 }
 
-const courierLinkPattern = new RegExp(
-    `https?:\\/\\/(?:www\\.)?((?!.*${[fedex, ups, usps]
-        .map(courier => courier.courier_code)
-        .join(
-            '|.*'
-        )}).*)\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&//=]*)`,
-    'gi'
-);
-
 function getPlainBody(message) {
     let body;
     let part = message.data.payload;
@@ -208,15 +233,13 @@ function getPlainBody(message) {
 
     body = base64url.decode(part.body.data);
     if (isHtml) body = textVersion(body);
-    body = body.replace(courierLinkPattern, '');
+    body = body.replace(nonCourierLinkPattern, '');
 
     return body;
 }
 
 async function restorePackages(email) {
-    const account = await db.Account.findOne({ email });
-
-    if (!account) throw 'Account does not exist';
+    const account = await getAccountByEmail(email);
 
     account.updated = undefined;
     await account.save();
@@ -225,9 +248,7 @@ async function restorePackages(email) {
 }
 
 async function resetPackages(email) {
-    const account = await db.Account.findOne({ email });
-
-    if (!account) throw 'Account does not exist';
+    const account = await getAccountByEmail(email);
 
     account.packages = undefined;
     account.updated = undefined;
@@ -237,27 +258,18 @@ async function resetPackages(email) {
 }
 
 async function addPackage(email, body) {
-    const account = await db.Account.findOne({ email });
-
-    if (!account) throw 'Account does not exist';
-
+    const account = await getAccountByEmail(email);
     const { courierCode, trackingNumber, sender, senderUrl } = body;
-
-    if (!courierCode || !trackingNumber || !sender) throw 'Malformed request';
 
     if (
         account.packages.find(
             package => trackingNumber === package.trackingNumber
         )
-    ) {
-        account.packages = [];
+    )
         throw 'Tracking number already exists';
-    }
 
     const info = await track(courierCode, trackingNumber);
-
     if (!info) throw 'Invalid tracking number';
-
     const package = {
         ...info,
         trackingNumber,
@@ -267,9 +279,7 @@ async function addPackage(email, body) {
         senderUrl,
         updated: Date.now()
     };
-
     account.packages.push(package);
-
     account.updated = Date.now();
     await account.save();
 
@@ -277,18 +287,11 @@ async function addPackage(email, body) {
 }
 
 async function deletePackages(email, body) {
-    const account = await db.Account.findOne({ email });
-
-    if (!account) throw 'Account does not exist';
-
-    if (!body) throw 'Malformed request';
-
+    const account = await getAccountByEmail(email);
     const selected = new Set(body);
-
     account.packages = account.packages.filter(
         package => !selected.has(package.trackingNumber)
     );
-
     account.updated = Date.now();
     await account.save();
 }
@@ -325,23 +328,14 @@ async function revokeToken({ token, ipAddress }) {
     await refreshToken.save();
 }
 
-async function register(params, ipAddress, origin) {
-    // validate
-    const existing = await db.Account.findOne({ email: params.email });
-    if (existing) await _delete(existing._id);
-    // if (await db.Account.findOne({ email: params.email }))
-    // throw 'Email "' + params.email + '" is already registered';
-
-    // create account object
-    const account = new db.Account(params);
-
-    // first registered account is an admin
-    const isFirstAccount = (await db.Account.countDocuments({})) === 0;
-    account.role = isFirstAccount ? Role.Admin : Role.User;
-    // account.verificationToken = randomTokenString();
-
-    // save account
-    await account.save();
+async function signIn(params, ipAddress, origin) {
+    let account = await db.Account.findOne({ email: params.email });
+    if (!account) {
+        account = new db.Account(params);
+        const isFirstAccount = (await db.Account.countDocuments({})) === 0;
+        account.role = isFirstAccount ? Role.Admin : Role.User;
+        await account.save();
+    }
 
     const jwtToken = generateJwtToken(account);
     const refreshToken = generateRefreshToken(account, ipAddress);
@@ -364,6 +358,12 @@ async function _delete(id) {
 
 // helper functions
 
+async function getAccountByEmail(email) {
+    const account = await db.Account.findOne({ email });
+    if (!account) throw 'Account not found';
+    return account;
+}
+
 async function getAccount(id) {
     if (!db.isValidId(id)) throw 'Account not found';
     const account = await db.Account.findById(id);
@@ -380,18 +380,18 @@ async function getRefreshToken(token) {
 }
 
 function generateJwtToken(account) {
-    // create a jwt token containing the account id that expires in 15 minutes
+    // create a jwt token containing the account id that expires in 1 hour
     return jwt.sign({ sub: account.id, id: account.id }, config.secret, {
-        expiresIn: '1m'
+        expiresIn: '1h'
     });
 }
 
 function generateRefreshToken(account, ipAddress) {
-    // create a refresh token that expires in 2 years
+    // create a refresh token that expires in 6 months
     return new db.RefreshToken({
         account: account.id,
         token: randomTokenString(),
-        expires: new Date(Date.now() + 2 * 365 * 7 * 24 * 60 * 60 * 1000),
+        expires: new Date(Date.now() + 6 * 30 * 7 * 24 * 60 * 60 * 1000),
         createdByIp: ipAddress
     });
 }
