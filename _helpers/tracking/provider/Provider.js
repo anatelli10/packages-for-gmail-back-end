@@ -30,16 +30,6 @@ class Provider {
 
         return this.parse(response);
     }
-
-    // abstract getUrl(trackingNumber: string): string;
-
-    // abstract getOptions(
-    //   trackingNumber: string
-    // ): OptionsOfTextResponseBody | undefined;
-
-    // abstract getResponseType(): ResponseType;
-
-    // abstract parse(response: any): PackageInfo;
 }
 
 module.exports = {
