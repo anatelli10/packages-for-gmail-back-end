@@ -24,7 +24,7 @@
 
 ## About
 
-Work in progress. Backend for the [Packages for Gmail](https://github.com/anatelli10/packages-for-gmail) Chrome Extension. Authenticates users with Google OAuth. Queries Gmail API for email messages then detects tracking numbers in them using [TS Tracking Number](https://github.com/rjbrooksjr/ts-tracking-number) and a little magic. Built on top of [Express MongoDB example from BezKoder](https://github.com/bezkoder/jwt-refresh-token-node-js-mongodb).
+Work in progress. Backend for the [Packages for Gmail](https://github.com/anatelli10/packages-for-gmail) Chrome Extension. Authenticates users with Google OAuth. Queries Gmail API for email messages then detects tracking numbers in them using [TS Tracking Number](https://github.com/rjbrooksjr/ts-tracking-number) and a little bit of magic. Built on top of [Express MongoDB example from BezKoder](https://github.com/bezkoder/jwt-refresh-token-node-js-mongodb).
 
 ### Built With
 
