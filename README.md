@@ -1,7 +1,7 @@
 <p align="center">
 
   <h3 align="center">
-    <a href="https://packagesforgmail.com/">[WIP] Packages for Gmail (Backend)</a>
+    <a href="https://packagesforgmail.com/">[WIP] Packages for Gmail (Back-End)</a>
   </h3>
 
 </p>
