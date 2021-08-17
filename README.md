@@ -25,7 +25,7 @@
 
 ## About
 
-#### Code Examples:
+#### Code Examples
 -   [accounts/account-service.js](https://github.com/anatelli10/packages-for-gmail-back-end/blob/main/accounts/account.service.js)
 -   [\_helpers/tracking](https://github.com/anatelli10/packages-for-gmail-back-end/tree/main/_helpers/tracking)
 
