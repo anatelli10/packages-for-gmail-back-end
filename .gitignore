@@ -38,5 +38,4 @@ typings
 .node_repl_history
 
 # Secrets
-config.json
-_helpers/tracking/credentials.json
+.env
