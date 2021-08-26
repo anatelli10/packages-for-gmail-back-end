@@ -30,7 +30,7 @@ async function authCallback(req, res, next) {
   const emailAddress = JSON.parse(decodeURIComponent(req.query.state)).emailAddress;
 
   accountService
-    .authCallback(req.query.code, emailAddress, req.ip, req.get('origin'))
+    .authCallback(req.query.code, emailAddress, req.ip)
     .then((response) =>
       res.send(
         `<script>
@@ -79,21 +79,21 @@ function revokeToken(req, res, next) {
 
 function getPackages(req, res, next) {
   accountService
-    .getPackages(req.query.email)
+    .getPackages(req.account)
     .then((packages) => res.json({ packages }))
     .catch(next);
 }
 
 function restorePackages(req, res, next) {
   accountService
-    .restorePackages(req.query.email)
+    .restorePackages(req.account)
     .then((packages) => res.json({ packages }))
     .catch(next);
 }
 
 function resetPackages(req, res, next) {
   accountService
-    .resetPackages(req.query.email)
+    .resetPackages(req.account)
     .then((packages) => res.json({ packages }))
     .catch(next);
 }
@@ -105,7 +105,7 @@ function deletePackagesSchema(req, res, next) {
 
 function deletePackages(req, res, next) {
   accountService
-    .deletePackages(req.query.email, req.body)
+    .deletePackages(req.account, req.body)
     .then(() => res.json({ message: 'Package(s) deleted' }))
     .catch(next);
 }
@@ -122,7 +122,7 @@ function addPackageSchema(req, res, next) {
 
 function addPackage(req, res, next) {
   accountService
-    .addPackage(req.query.email, req.body)
+    .addPackage(req.account, req.body)
     .then((package) => res.json({ package }))
     .catch(next);
 }

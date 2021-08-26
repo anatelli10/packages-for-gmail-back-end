@@ -5,6 +5,9 @@ const schema = new Schema({
   email: { type: String, unique: true, required: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
+  googleAccessToken: { type: String, required: true },
+  googleRefreshToken: { type: String, required: true },
+  googleTokenExpiry: Number,
   packages: [
     {
       _id: false,
@@ -21,13 +24,6 @@ const schema = new Schema({
       updated: Number
     }
   ],
-  googleAccessToken: { type: String, required: true },
-  googleRefreshToken: { type: String, required: true },
-  googleTokenExpiry: Number,
-  resetToken: {
-    token: String,
-    expires: Date
-  },
   created: { type: Number, default: Date.now },
   updated: Number
 });

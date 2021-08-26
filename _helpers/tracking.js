@@ -1,13 +1,17 @@
 const base64url = require('base64url');
 const textVersion = require('textversionjs');
-const { findTracking, fedex, ups, usps } = require('ts-tracking-number');
+const { findTracking, fedex, ups, usps, s10 } = require('ts-tracking-number');
 const { track } = require('ts-shipment-tracking');
 const { google } = require('googleapis');
 const { getAccessToken } = require('_helpers/googleAuth');
+const NodeCache = require('node-cache');
 
 module.exports = { getTracking, updateExistingPackages, findNewPackages };
 
 const gmail = google.gmail('v1');
+
+// Caches tracking number info for 1 hour to comply with courier API guidelines
+const trackingCache = new NodeCache({ stdTTL: 60 * 60 });
 
 // Find tracking numbers from messages this many days old or newer
 const AMOUNT_OF_DAYS = 90;
@@ -33,14 +37,29 @@ const statuses = {
 };
 
 async function getTracking(trackingNumber) {
+  const cached = trackingCache.get(trackingNumber);
+  if (cached) return cached;
+
   const info = await track(trackingNumber);
+
   if (!info) return;
+
+  const delivered = info.events[0].status === 'DELIVERED';
   info.events[0].status = statuses[info.events[0].status];
-  return { ...info.events[0], deliveryTime: info.estimatedDelivery };
+
+  const tracking = {
+    ...info.events[0],
+    deliveryTime: info.estimatedDeliveryDate ?? delivered ? info.events[0].date : undefined
+  };
+
+  trackingCache.set(trackingNumber, tracking);
+
+  return tracking;
 }
 
 async function updateExistingPackages(packages) {
   const now = Date.now();
+  if (!packages) return;
   for (const package of packages) {
     // Skip packages who are 90 days or older
     if ((Date.now() - package.messageDate) / (24 * 60 * 60) >= AMOUNT_OF_DAYS) continue;
@@ -118,9 +137,9 @@ async function findNewPackages(account) {
     const messageBody = getPlainBody(message);
 
     // Find tracking numbers in message bodies
-    for (const tracking of findTracking(messageBody, [fedex, ups, usps])) {
+    for (const tracking of findTracking(messageBody, [fedex, ups, usps, s10])) {
       const trackingNumber = tracking.trackingNumber;
-      const courierCode = tracking.courier.code;
+      const courierCode = tracking.courier.code === 's10' ? 'usps' : tracking.courier.code;
 
       // Skip duplicates
       if (existingNumbers.has(trackingNumber)) continue;

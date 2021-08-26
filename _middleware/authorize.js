@@ -16,6 +16,7 @@ function authorize() {
 
       if (!account) return res.status(401).json({ message: 'Account does not exist' });
 
+      req.account = account;
       req.user.ownsToken = (token) => !!refreshTokens.find((x) => x.token === token);
       next();
     }

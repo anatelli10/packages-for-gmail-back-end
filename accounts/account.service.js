@@ -16,7 +16,7 @@ module.exports = {
   addPackage
 };
 
-async function authCallback(code, emailAddress, ipAddress, origin) {
+async function authCallback(code, emailAddress, ipAddress) {
   const { access_token, refresh_token, id_token, expiry_date } = (await getToken(code)).tokens;
 
   const { email, given_name, family_name } = jwt.decode(id_token);
@@ -37,7 +37,6 @@ async function authCallback(code, emailAddress, ipAddress, origin) {
       googleRefreshToken: refresh_token,
       googleTokenExpiry: expiry_date
     });
-    const isFirstAccount = (await db.Account.countDocuments({})) === 0;
     await account.save();
   }
 
@@ -55,13 +54,10 @@ async function authCallback(code, emailAddress, ipAddress, origin) {
   };
 }
 
-async function getPackages(email) {
-  const account = await getAccountByEmail(email);
+async function getPackages(account) {
+  // Throttle existing package updates to once per hour
+  if (Date.now() - account.updated < 60 * 60 * 1000) await updateExistingPackages(account.packages);
 
-  // Only update up to once per hour
-  // if (Date.now() - account.updated < 60 * 60 * 1000) return account.packages;
-
-  await updateExistingPackages(account.packages);
   await findNewPackages(account);
 
   account.updated = Date.now();
@@ -71,27 +67,20 @@ async function getPackages(email) {
   return account.packages;
 }
 
-async function restorePackages(email) {
-  const account = await getAccountByEmail(email);
-
+async function restorePackages(account) {
   account.updated = undefined;
   await account.save();
-
-  return getPackages(email);
+  return getPackages(account);
 }
 
-async function resetPackages(email) {
-  const account = await getAccountByEmail(email);
-
-  account.packages = undefined;
+async function resetPackages(account) {
+  account.packages = [];
   account.updated = undefined;
   await account.save();
-
-  return getPackages(email);
+  return getPackages(account);
 }
 
-async function addPackage(email, body) {
-  const account = await getAccountByEmail(email);
+async function addPackage(account, body) {
   const { courierCode, trackingNumber, sender, senderUrl } = body;
 
   if (account.packages.find((package) => trackingNumber === package.trackingNumber))
@@ -116,8 +105,7 @@ async function addPackage(email, body) {
   return package;
 }
 
-async function deletePackages(email, body) {
-  const account = await getAccountByEmail(email);
+async function deletePackages(account, body) {
   const selected = new Set(body);
   account.packages = account.packages.filter((package) => !selected.has(package.trackingNumber));
   account.updated = Date.now();
@@ -156,22 +144,13 @@ async function revokeToken({ token, ipAddress }) {
   await refreshToken.save();
 }
 
-async function _delete(id) {
-  const account = await getAccount(id);
+async function _delete(account) {
   await account.remove();
 }
 
-// helper functions
-
-async function getAccountByEmail(email) {
-  const account = await db.Account.findOne({ email });
-  if (!account) throw 'Account not found';
-  return account;
-}
-
 async function getAccount(id) {
-  if (!db.isValidId(id)) throw 'Account not found';
-  const account = await db.Account.findById(id);
+  if (!db.isValidId(account)) throw 'Account not found';
+  const account = await db.Account.findById(account);
   if (!account) throw 'Account not found';
   return account;
 }
