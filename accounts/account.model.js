@@ -15,7 +15,7 @@ const schema = new Schema({
       courierCode: { type: String, required: true },
       status: { type: Number, required: true },
       label: { type: String, required: false },
-      deliveryTime: { type: Number, required: false },
+      deliveryDate: { type: Number, required: false },
       messageId: { type: String, required: false },
       messageDate: { type: Number, required: false },
       sender: { type: String, required: true },

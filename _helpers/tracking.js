@@ -49,7 +49,7 @@ async function getTracking(trackingNumber) {
 
   const tracking = {
     ...info.events[0],
-    deliveryTime: info.estimatedDeliveryDate ?? delivered ? info.events[0].date : undefined
+    deliveryDate: info.estimatedDeliveryDate ?? delivered ? info.events[0].date : undefined
   };
 
   trackingCache.set(trackingNumber, tracking);
@@ -71,7 +71,7 @@ async function updateExistingPackages(packages) {
 
     if (package.label != info.label) package.label = info.label;
 
-    if (package.deliveryTime != info.deliveryTime) package.deliveryTime = info.deliveryTime;
+    if (package.deliveryDate != info.deliveryDate) package.deliveryDate = info.deliveryDate;
   }
 }
 
