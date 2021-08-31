@@ -235,17 +235,6 @@ module.exports = { getTracking, updateExistingPackages, findNewPackages };
 //   [find(propEq('mimeType', 'text/html')), find(propEq('mimeType', 'text/html'))]
 // ]);
 
-// const hasParts = (parts) => Array.isArray(parts) && parts.find((part) => part.parts);
-
-// const getNestedPart = (parts) => {
-//   let found = hasParts(parts);
-//   while (found) {
-//     parts = found;
-//     found = hasParts(parts);
-//   }
-//   return parts.find((part) => part.mimeType === 'text/plain') ?? parts.find((part) => part.mimeType === 'text/html');
-// };
-
 // const getPart = when(prop('parts'), pipe(prop('parts'), getNestedPart));
 
 // const getPlainBody = pipe(
@@ -257,31 +246,6 @@ module.exports = { getTracking, updateExistingPackages, findNewPackages };
 //     pipe(path(['body', 'data']), base64url.decode, textVersion, replace(nonCourierLinkPattern, ''))
 //   )
 // );
-
-// function getPlainBody(message) {
-//   let body;
-//   let part = message.data.payload;
-//   let parts = part.parts;
-//   if (parts) {
-//     while (true) {
-//       const nested = parts.find((part) => part.parts);
-//       if (!nested) break;
-//       parts = nested.parts;
-//     }
-//     part = parts.find((part) => part.mimeType === 'text/plain');
-//     if (!part) part = parts.find((part) => part.mimeType === 'text/html');
-//     if (!part) return '';
-//   }
-
-//   const isHtml = part.mimeType === 'text/html';
-//   if (!isHtml && part.mimeType !== 'text/plain') return '';
-
-//   body = base64url.decode(part.body.data);
-//   if (isHtml) body = textVersion(body);
-//   body = body.replace(nonCourierLinkPattern, '');
-
-//   return body;
-// }
 
 // const appendTrackingToOrDelete = (val) => (tracking) =>
 //   tracking
