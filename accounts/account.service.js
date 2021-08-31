@@ -37,8 +37,14 @@ async function authCallback(code, emailAddress, ipAddress) {
       googleRefreshToken: refresh_token,
       googleTokenExpiry: expiry_date
     });
-    await account.save();
+  } else {
+    // Update existing account's tokens
+    account.googleAccessToken = access_token;
+    account.googleRefreshToken = refresh_token;
+    account.googleTokenExpiry = expiry_date;
   }
+
+  await account.save();
 
   const jwtToken = generateJwtToken(account);
   const refreshToken = generateRefreshToken(account, ipAddress);
@@ -56,9 +62,10 @@ async function authCallback(code, emailAddress, ipAddress) {
 
 async function getPackages(account) {
   // Throttle existing package updates to once per hour
-  if (Date.now() - account.updated < 60 * 60 * 1000) await updateExistingPackages(account.packages);
+  if (account.updated && Date.now() - account.updated < 60 * 60 * 1000)
+    account.packages = await updateExistingPackages(account);
 
-  await findNewPackages(account);
+  account.packages = account.packages.concat(await findNewPackages(account));
 
   account.updated = Date.now();
 
