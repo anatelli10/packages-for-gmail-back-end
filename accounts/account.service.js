@@ -104,7 +104,6 @@ async function addPackage(account, body) {
     senderUrl,
     updated: Date.now()
   };
-  console.log('add:', package);
   account.packages.push(package);
   account.updated = Date.now();
   await account.save();

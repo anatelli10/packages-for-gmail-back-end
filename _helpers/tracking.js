@@ -47,23 +47,11 @@ const nonCourierLinkPattern = new RegExp(
   'gi'
 );
 
-// Temporary helper array to convert new ts-shipment-tracking string statuses back to index numbers
-const statuses = {
-  UNAVAILABLE: 0,
-  LABEL_CREATED: 1,
-  IN_TRANSIT: 2,
-  OUT_FOR_DELIVERY: 3,
-  DELIVERY_ATTEMPTED: 4,
-  RETURNED_TO_SENDER: 5,
-  EXCEPTION: 6,
-  DELIVERED: 7
-};
-
 const getInfo = (trackingInfo) =>
   trackingInfo
     ? {
-        status: statuses[trackingInfo.events[0].status],
-        label: trackingInfo.events[0].status,
+        status: trackingInfo.events[0].status,
+        label: trackingInfo.events[0].label,
         deliveryDate:
           trackingInfo.events[0].status === 'DELIVERED'
             ? trackingInfo.events[0].date
@@ -71,22 +59,23 @@ const getInfo = (trackingInfo) =>
       }
     : undefined;
 
-const getTrackingInfo = (trackingNumber) =>
-  trackingCache.has(trackingNumber) ? trackingCache.get(trackingNumber) : track(trackingNumber).then(getInfo);
-
 const getTracking = (trackingNumber) =>
-  getTrackingInfo(trackingNumber).then((trackingInfo) => {
-    trackingCache.set(trackingNumber, trackingInfo);
-    return trackingInfo;
-  });
+  trackingCache.has(trackingNumber)
+    ? Promise.resolve(trackingCache.get(trackingNumber))
+    : track(trackingNumber)
+        .then(getInfo)
+        .then((trackingInfo) => {
+          trackingCache.set(trackingNumber, trackingInfo);
+          return trackingInfo;
+        });
 
 const updatePackage = (package) =>
-  (Date.now() - package.messageDate) / (24 * 60 * 60) >= AMOUNT_OF_DAYS
-    ? Promise.resolve(package)
-    : getTracking(package.trackingNumber).then((response) => ({
+  Date.now() - package.messageDate <= AMOUNT_OF_DAYS * 24 * 60 * 60 * 1000
+    ? getTracking(package.trackingNumber).then((response) => ({
         ...package,
         ...response
-      }));
+      }))
+    : Promise.resolve(package);
 
 const updateExistingPackages = (account) => Promise.all(account.packages.map(updatePackage));
 
@@ -143,7 +132,7 @@ const getPackages = (account) => (messages) => {
               }
             : Date.now() - messageData.messageDate <= 2 * 24 * 60 * 60 * 1000 // no status but less than 2 days old
             ? {
-                status: 0,
+                status: 'UNAVAILABLE',
                 ...messageData
               }
             : undefined

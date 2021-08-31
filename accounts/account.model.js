@@ -13,7 +13,7 @@ const schema = new Schema({
       _id: false,
       trackingNumber: { type: String, required: true },
       courierCode: { type: String, required: true },
-      status: { type: Number, required: true },
+      status: { type: String, required: true },
       label: { type: String, required: false },
       deliveryDate: { type: Number, required: false },
       messageId: { type: String, required: false },
